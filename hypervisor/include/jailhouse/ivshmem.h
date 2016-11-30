@@ -18,8 +18,7 @@
 #include <asm/ivshmem.h>
 #include <asm/spinlock.h>
 
-#define IVSHMEM_CFG_MSIX_CAP	0x50
-#define IVSHMEM_CFG_SIZE	(IVSHMEM_CFG_MSIX_CAP + 12)
+#define IVSHMEM_CFG_SIZE	0x60
 
 #define IVSHMEM_INTX_ENABLE	0x1
 
