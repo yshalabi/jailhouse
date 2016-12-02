@@ -20,8 +20,6 @@
 
 #define IVSHMEM_CFG_SIZE	0x60
 
-#define IVSHMEM_INTX_ENABLE	0x1
-
 /**
  * @defgroup IVSHMEM ivshmem
  * @{
@@ -38,7 +36,6 @@ struct ivshmem_endpoint {
 	struct ivshmem_endpoint *remote;
 	spinlock_t remote_lock;
 	struct arch_pci_ivshmem arch;
-	u32 intx_ctrl_reg;
 };
 
 int ivshmem_init(struct cell *cell, struct pci_device *device);
@@ -69,8 +66,9 @@ int arch_ivshmem_update_msix(struct pci_device *device);
 /**
  * Update cached INTx state (if any) of the given ivshmem device.
  * @param ive		Ivshmem endpoint to be updated.
+ * @param enable	True if INTx is enabled.
  */
-void arch_ivshmem_update_intx(struct ivshmem_endpoint *ive);
+void arch_ivshmem_update_intx(struct ivshmem_endpoint *ive, bool enabled);
 
 /** @} IVSHMEM */
 #endif /* !_JAILHOUSE_IVSHMEM_H */

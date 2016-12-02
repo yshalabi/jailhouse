@@ -43,9 +43,11 @@
 #define IVSHMEM_CFG_SHMEM_SIZE	(IVSHMEM_CFG_VENDOR_CAP + 12)
 #define IVSHMEM_CFG_VENDOR_LEN	20
 
+/* Flags in IVSHMEM_CFG_VENDOR_CAP + 3 */
+#define IVHSMEM_CFGFLAG_INTX	(1 << (0 + 24))
+
 #define IVSHMEM_MSIX_VECTORS	1
 
-#define IVSHMEM_REG_INTX_CTRL	0
 #define IVSHMEM_REG_IVPOS	8
 #define IVSHMEM_REG_DBELL	12
 #define IVSHMEM_REG_LSTATE	16
@@ -96,16 +98,6 @@ static enum mmio_result ivshmem_register_mmio(void *arg,
 					      struct mmio_access *mmio)
 {
 	struct ivshmem_endpoint *ive = arg;
-
-	if (mmio->address == IVSHMEM_REG_INTX_CTRL) {
-		if (mmio->is_write) {
-			ive->intx_ctrl_reg = mmio->value & IVSHMEM_INTX_ENABLE;
-			arch_ivshmem_update_intx(ive);
-		} else {
-			mmio->value = ive->intx_ctrl_reg;
-		}
-		return MMIO_HANDLED;
-	}
 
 	/* read-only IVPosition */
 	if (mmio->address == IVSHMEM_REG_IVPOS && !mmio->is_write) {
@@ -287,7 +279,15 @@ enum pci_access ivshmem_pci_cfg_write(struct pci_device *device,
 	case IVSHMEM_CFG_MSIX_CAP / 4:
 		if (ivshmem_write_msix_control(ive, value))
 			return PCI_ACCESS_REJECT;
+		break;
+	case IVSHMEM_CFG_VENDOR_CAP / 4:
+		ive->cspace[IVSHMEM_CFG_VENDOR_CAP/4] &= ~IVHSMEM_CFGFLAG_INTX;
+		ive->cspace[IVSHMEM_CFG_VENDOR_CAP/4] |=
+			value & IVHSMEM_CFGFLAG_INTX;
+		arch_ivshmem_update_intx(ive, value & IVHSMEM_CFGFLAG_INTX);
+		break;
 	}
+
 	return PCI_ACCESS_DONE;
 }
 
