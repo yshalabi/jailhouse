@@ -48,10 +48,10 @@
 
 #define IVSHMEM_MSIX_VECTORS	1
 
-#define IVSHMEM_REG_IVPOS	8
-#define IVSHMEM_REG_DBELL	12
-#define IVSHMEM_REG_LSTATE	16
-#define IVSHMEM_REG_RSTATE	20
+#define IVSHMEM_REG_IVPOS	0x00
+#define IVSHMEM_REG_DOORBELL	0x04
+#define IVSHMEM_REG_LSTATE	0x08
+#define IVSHMEM_REG_RSTATE	0x0c
 
 /*
  * Make the region two times as large as the MSI-X table to guarantee a
@@ -103,7 +103,7 @@ static enum mmio_result ivshmem_register_mmio(void *arg,
 		/* read-only IVPosition */
 		mmio->value = ive->ivpos;
 		break;
-	case IVSHMEM_REG_DBELL:
+	case IVSHMEM_REG_DOORBELL:
 		if (mmio->is_write)
 			ivshmem_remote_interrupt(ive);
 		else
