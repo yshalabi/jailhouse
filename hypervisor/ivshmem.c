@@ -39,9 +39,9 @@
  * We cannot allow dynamic remapping of the shared memory location under
  * Jailhouse. Therefore, location and size are reported via a vendor capability.
  */
-#define IVSHMEM_CFG_SHMEM_ADDR	(IVSHMEM_CFG_VENDOR_CAP + 4)
-#define IVSHMEM_CFG_SHMEM_SIZE	(IVSHMEM_CFG_VENDOR_CAP + 12)
-#define IVSHMEM_CFG_VENDOR_LEN	20
+#define IVSHMEM_CFG_SHMEM_ADDR0	(IVSHMEM_CFG_VENDOR_CAP + 4)
+#define IVSHMEM_CFG_SHMEM_SIZE0	(IVSHMEM_CFG_VENDOR_CAP + 12)
+#define IVSHMEM_CFG_VENDOR_LEN	52
 
 /* Flags in IVSHMEM_CFG_VENDOR_CAP + 3 */
 #define IVHSMEM_CFGFLAG_INTX	(1 << (0 + 24))
@@ -61,6 +61,7 @@
 #define IVSHMEM_REG_RSTATE_WRITE	0x10
 
 #define IVSHMEM_RSTATE_WRITE_ENABLE	(1ULL << 0)
+#define IVSHMEM_RSTATE_WRITE_REGION1	(1ULL << 1)
 #define IVSHMEM_RSTATE_OFFSET_MASK	BIT_MASK(63, 2)
 
 struct ivshmem_link {
@@ -90,7 +91,9 @@ static void ivshmem_write_rstate(struct ivshmem_endpoint *ive, u32 new_state)
 {
 	unsigned long page_virt = TEMPORARY_MAPPING_BASE +
 		this_cpu_id() * PAGE_SIZE * NUM_TEMPORARY_PAGES;
-	const struct jailhouse_memory *shmem = ive->shmem;
+	unsigned int region =
+		(ive->rstate_write & IVSHMEM_RSTATE_WRITE_REGION1) ? 1 : 0;
+	const struct jailhouse_memory *shmem = &ive->shmem[region];
 	unsigned long rstate_offs;
 	u32 *rstate;
 
@@ -397,10 +400,12 @@ int ivshmem_init(struct cell *cell, struct pci_device *device)
 	printk("Adding virtual PCI device %02x:%02x.%x to cell \"%s\"\n",
 	       PCI_BDF_PARAMS(dev_info->bdf), cell->config->name);
 
-	if (dev_info->shmem_region >= cell->config->num_memory_regions)
+	if (dev_info->shmem_regions_start + 2 >=
+	    cell->config->num_memory_regions)
 		return trace_error(-EINVAL);
 
-	mem = jailhouse_cell_mem_regions(cell->config) + dev_info->shmem_region;
+	mem = jailhouse_cell_mem_regions(cell->config) +
+		dev_info->shmem_regions_start;
 
 	for (link = ivshmem_links; link; link = link->next)
 		if (link->bdf == dev_info->bdf)
@@ -413,12 +418,20 @@ int ivshmem_init(struct cell *cell, struct pci_device *device)
 
 		peer_dev = link->eps[id ^ 1].device;
 		peer_mem = jailhouse_cell_mem_regions(peer_dev->cell->config) +
-			peer_dev->info->shmem_region;
+			peer_dev->info->shmem_regions_start;
 
-		/* check that the regions and protocols of both peers match */
-		if (peer_mem->phys_start != mem->phys_start ||
-		    peer_mem->size != mem->size ||
-		    peer_dev->info->shmem_protocol != dev_info->shmem_protocol)
+		/*
+		 * Check that the regions and protocols of both peers match.
+		 * The 3rd region of both devices must be read-only.
+		 */
+		if (mem[0].phys_start != peer_mem[0].phys_start ||
+		    mem[0].size != peer_mem[0].size ||
+		    mem[1].phys_start != peer_mem[2].phys_start ||
+		    mem[1].size != peer_mem[2].size ||
+		    mem[2].phys_start != peer_mem[1].phys_start ||
+		    mem[2].size != peer_mem[1].size ||
+		    (mem[2].flags | peer_mem[2].flags) & JAILHOUSE_MEM_WRITE ||
+		    dev_info->shmem_protocol != peer_dev->info->shmem_protocol)
 			return trace_error(-EINVAL);
 
 		printk("Shared memory connection established: "
@@ -456,6 +469,7 @@ int ivshmem_init(struct cell *cell, struct pci_device *device)
 void ivshmem_reset(struct pci_device *device)
 {
 	struct ivshmem_endpoint *ive = device->ivshmem_endpoint;
+	unsigned int n;
 
 	if (ive->cspace[PCI_CFG_COMMAND/4] & PCI_CMD_MEM) {
 		mmio_region_unregister(device->cell, ive->bar0_address);
@@ -481,12 +495,16 @@ void ivshmem_reset(struct pci_device *device)
 		device->bar[4] = PCI_BAR_64BIT;
 	}
 
-	ive->cspace[IVSHMEM_CFG_SHMEM_ADDR/4] = (u32)ive->shmem->virt_start;
-	ive->cspace[IVSHMEM_CFG_SHMEM_ADDR/4 + 1] =
-		(u32)(ive->shmem->virt_start >> 32);
-	ive->cspace[IVSHMEM_CFG_SHMEM_SIZE/4] = (u32)ive->shmem->size;
-	ive->cspace[IVSHMEM_CFG_SHMEM_SIZE/4 + 1] =
-		(u32)(ive->shmem->size >> 32);
+	for (n = 0; n < 3; n++) {
+		ive->cspace[IVSHMEM_CFG_SHMEM_ADDR0/4 + n*4] =
+			(u32)ive->shmem[n].virt_start;
+		ive->cspace[IVSHMEM_CFG_SHMEM_ADDR0/4 + n*4 + 1] =
+			(u32)(ive->shmem[n].virt_start >> 32);
+		ive->cspace[IVSHMEM_CFG_SHMEM_SIZE0/4 + n*4] =
+			(u32)ive->shmem[n].size;
+		ive->cspace[IVSHMEM_CFG_SHMEM_SIZE0/4 + n*4 + 1] =
+			(u32)(ive->shmem[n].size >> 32);
+	}
 
 	ive->state = 0;
 }

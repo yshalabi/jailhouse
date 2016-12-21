@@ -17,7 +17,7 @@
 #include <jailhouse/pci.h>
 #include <asm/ivshmem.h>
 
-#define IVSHMEM_CFG_SIZE	0x60
+#define IVSHMEM_CFG_SIZE	0x80
 
 /**
  * @defgroup IVSHMEM ivshmem

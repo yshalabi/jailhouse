@@ -21,9 +21,9 @@ struct {
 	struct jailhouse_cell_desc cell;
 	__u64 cpus[1];
 #ifdef CONFIG_QEMU_E1000E_ASSIGNMENT
-	struct jailhouse_memory mem_regions[8];
+	struct jailhouse_memory mem_regions[10];
 #else
-	struct jailhouse_memory mem_regions[4];
+	struct jailhouse_memory mem_regions[6];
 #endif
 	struct jailhouse_cache cache_regions[1];
 	__u8 pio_bitmap[0x2000];
@@ -75,13 +75,20 @@ struct {
 				JAILHOUSE_MEM_EXECUTE | JAILHOUSE_MEM_DMA |
 				JAILHOUSE_MEM_LOADABLE,
 		},
-		/* IVSHMEM shared memory region */
+		/* IVSHMEM shared memory regions */
+		{ 0 },
+		{
+			.phys_start = 0x3f17f000,
+			.virt_start = 0x3f17f000,
+			.size = 0x7f000,
+			.flags = JAILHOUSE_MEM_READ | JAILHOUSE_MEM_WRITE |
+				JAILHOUSE_MEM_ROOTSHARED,
+		},
 		{
 			.phys_start = 0x3f100000,
 			.virt_start = 0x3f100000,
-			.size = 0xff000,
-			.flags = JAILHOUSE_MEM_READ | JAILHOUSE_MEM_WRITE |
-				JAILHOUSE_MEM_ROOTSHARED,
+			.size = 0x7f000,
+			.flags = JAILHOUSE_MEM_READ | JAILHOUSE_MEM_ROOTSHARED,
 		},
 #ifdef CONFIG_QEMU_E1000E_ASSIGNMENT
 		/* MemRegion: feb40000-feb7ffff : 0000:00:02.0 */
@@ -143,7 +150,7 @@ struct {
 				0x00000000, 0xffffffe0, 0xffffffff,
 			},
 			.num_msix_vectors = 1,
-			.shmem_region = 3,
+			.shmem_regions_start = 3,
 			.shmem_protocol = JAILHOUSE_SHMEM_PROTO_VETH,
 		},
 #ifdef CONFIG_QEMU_E1000E_ASSIGNMENT

@@ -24,7 +24,7 @@
 struct {
 	struct jailhouse_system header;
 	__u64 cpus[1];
-	struct jailhouse_memory mem_regions[16];
+	struct jailhouse_memory mem_regions[20];
 	struct jailhouse_irqchip irqchips[1];
 	__u8 pio_bitmap[0x2000];
 	struct jailhouse_pci_device pci_devices[9];
@@ -173,11 +173,18 @@ struct {
 			.flags = JAILHOUSE_MEM_READ | JAILHOUSE_MEM_WRITE,
 		},
 		/* IVSHMEM shared memory region (networking) */
+		{ 0 },
 		{
 			.phys_start = 0x3f100000,
 			.virt_start = 0x3f100000,
-			.size = 0xff000,
+			.size = 0x7f000,
 			.flags = JAILHOUSE_MEM_READ | JAILHOUSE_MEM_WRITE,
+		},
+		{
+			.phys_start = 0x3f17f000,
+			.virt_start = 0x3f17f000,
+			.size = 0x7f000,
+			.flags = JAILHOUSE_MEM_READ,
 		},
 		/* IVSHMEM shared memory region (demo) */
 		{
@@ -186,6 +193,8 @@ struct {
 			.size = 0x1000,
 			.flags = JAILHOUSE_MEM_READ | JAILHOUSE_MEM_WRITE,
 		},
+		{ 0 },
+		{ 0 },
 	},
 
 	.irqchips = {
@@ -299,7 +308,7 @@ struct {
 				0x00000000, 0xffffffe0, 0xffffffff,
 			},
 			.num_msix_vectors = 1,
-			.shmem_region = 14,
+			.shmem_regions_start = 14,
 			.shmem_protocol = JAILHOUSE_SHMEM_PROTO_VETH,
 		},
 		{ /* IVSHMEM (demo) */
@@ -311,7 +320,7 @@ struct {
 				0x00000000, 0xffffffe0, 0xffffffff,
 			},
 			.num_msix_vectors = 1,
-			.shmem_region = 15,
+			.shmem_regions_start = 17,
 			.shmem_protocol = JAILHOUSE_SHMEM_PROTO_UNDEFINED,
 		},
 	},

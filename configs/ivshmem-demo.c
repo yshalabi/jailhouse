@@ -18,7 +18,7 @@
 struct {
 	struct jailhouse_cell_desc cell;
 	__u64 cpus[1];
-	struct jailhouse_memory mem_regions[3];
+	struct jailhouse_memory mem_regions[5];
 	__u8 pio_bitmap[0x2000];
 	struct jailhouse_pci_device pci_devices[1];
 	struct jailhouse_pci_capability pci_caps[0];
@@ -54,7 +54,7 @@ struct {
 			.size = 0x00001000,
 			.flags = JAILHOUSE_MEM_READ | JAILHOUSE_MEM_COMM_REGION,
 		},
-		/* IVSHMEM shared memory region */
+		/* IVSHMEM shared memory regions */
 		{
 			.phys_start = 0x3f1ff000,
 			.virt_start = 0x3f1ff000,
@@ -62,6 +62,8 @@ struct {
 			.flags = JAILHOUSE_MEM_READ | JAILHOUSE_MEM_WRITE |
 				JAILHOUSE_MEM_ROOTSHARED,
 		},
+		{ 0 },
+		{ 0 },
 	},
 
 	.pio_bitmap = {
@@ -82,7 +84,7 @@ struct {
 				0x00000000, 0xffffffe0, 0xffffffff,
 			},
 			.num_msix_vectors = 1,
-			.shmem_region = 2,
+			.shmem_regions_start = 2,
 		},
 	},
 };
