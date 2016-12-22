@@ -111,6 +111,16 @@ int ivshmem_update_msix(struct pci_device *device)
 	return arch_ivshmem_update_msix(device, enabled);
 }
 
+static void ivshmem_update_intx(struct ivshmem_endpoint *ive)
+{
+	bool enabled = ive->cspace[IVSHMEM_CFG_VENDOR_CAP/4] &
+		IVHSMEM_CFGFLAG_INTX;
+	bool masked = ive->cspace[PCI_CFG_COMMAND/4] & PCI_CMD_INTX_OFF;
+
+	if (ive->device->info->num_msix_vectors == 0)
+		arch_ivshmem_update_intx(ive, enabled && !masked);
+}
+
 static enum mmio_result ivshmem_register_mmio(void *arg,
 					      struct mmio_access *mmio)
 {
@@ -224,6 +234,11 @@ static int ivshmem_write_command(struct ivshmem_endpoint *ive, u16 val)
 		*cmd = (*cmd & ~PCI_CMD_MEM) | (val & PCI_CMD_MEM);
 	}
 
+	if ((val & PCI_CMD_INTX_OFF) != (*cmd & PCI_CMD_INTX_OFF)) {
+		*cmd = (*cmd & ~PCI_CMD_INTX_OFF) | (val & PCI_CMD_INTX_OFF);
+		ivshmem_update_intx(ive);
+	}
+
 	return 0;
 }
 
@@ -277,7 +292,7 @@ enum pci_access ivshmem_pci_cfg_write(struct pci_device *device,
 		ive->cspace[IVSHMEM_CFG_VENDOR_CAP/4] &= ~IVHSMEM_CFGFLAG_INTX;
 		ive->cspace[IVSHMEM_CFG_VENDOR_CAP/4] |=
 			value & IVHSMEM_CFGFLAG_INTX;
-		arch_ivshmem_update_intx(ive, value & IVHSMEM_CFGFLAG_INTX);
+		ivshmem_update_intx(ive);
 		break;
 	}
 
