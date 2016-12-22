@@ -295,7 +295,7 @@ struct {
 			.domain = 0x0000,
 			.bdf = 0x0e << 3,
 			.bar_mask = {
-				0xffffff00, 0xffffffff, 0x00000000,
+				0xfffff000, 0xffffffff, 0x00000000,
 				0x00000000, 0xffffffe0, 0xffffffff,
 			},
 			.num_msix_vectors = 1,
@@ -307,7 +307,7 @@ struct {
 			.domain = 0x0000,
 			.bdf = 0x0f << 3,
 			.bar_mask = {
-				0xffffff00, 0xffffffff, 0x00000000,
+				0xfffff000, 0xffffffff, 0x00000000,
 				0x00000000, 0xffffffe0, 0xffffffff,
 			},
 			.num_msix_vectors = 1,

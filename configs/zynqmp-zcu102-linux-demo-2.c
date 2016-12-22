@@ -93,7 +93,7 @@ struct {
 			.type = JAILHOUSE_PCI_TYPE_IVSHMEM,
 			.bdf = 1 << 3,
 			.bar_mask = {
-				0xffffff00, 0xffffffff, 0x00000000,
+				0xfffff000, 0xffffffff, 0x00000000,
 				0x00000000, 0x00000000, 0x00000000,
 			},
 			.shmem_region = 2,
@@ -103,7 +103,7 @@ struct {
 			.type = JAILHOUSE_PCI_TYPE_IVSHMEM,
 			.bdf = 2 << 3,
 			.bar_mask = {
-				0xffffff00, 0xffffffff, 0x00000000,
+				0xfffff000, 0xffffffff, 0x00000000,
 				0x00000000, 0x00000000, 0x00000000,
 			},
 			.shmem_region = 3,
