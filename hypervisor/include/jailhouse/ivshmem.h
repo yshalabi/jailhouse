@@ -32,6 +32,7 @@ struct ivshmem_endpoint {
 	u32 state;
 	u64 bar0_address;
 	u64 bar4_address;
+	u64 rstate_write;
 	struct pci_device *device;
 	struct ivshmem_link *link;
 	const struct jailhouse_memory *shmem;

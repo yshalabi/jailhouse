@@ -48,16 +48,20 @@
 
 #define IVSHMEM_MSIX_VECTORS	1
 
-#define IVSHMEM_REG_ID		0x00
-#define IVSHMEM_REG_DOORBELL	0x04
-#define IVSHMEM_REG_LSTATE	0x08
-#define IVSHMEM_REG_RSTATE	0x0c
-
 /*
  * Make the region two times as large as the MSI-X table to guarantee a
  * power-of-2 size (encoding constraint of a BAR).
  */
 #define IVSHMEM_BAR4_SIZE	(0x10 * IVSHMEM_MSIX_VECTORS * 2)
+
+#define IVSHMEM_REG_ID			0x00
+#define IVSHMEM_REG_DOORBELL		0x04
+#define IVSHMEM_REG_LSTATE		0x08
+#define IVSHMEM_REG_RSTATE		0x0c
+#define IVSHMEM_REG_RSTATE_WRITE	0x10
+
+#define IVSHMEM_RSTATE_WRITE_ENABLE	(1ULL << 0)
+#define IVSHMEM_RSTATE_OFFSET_MASK	BIT_MASK(63, 2)
 
 struct ivshmem_link {
 	struct ivshmem_endpoint eps[2];
@@ -82,16 +86,33 @@ static const u32 default_cspace[IVSHMEM_CFG_SIZE / sizeof(u32)] = {
 	[(IVSHMEM_CFG_MSIX_CAP + 0x8)/4] = 0x10 * IVSHMEM_MSIX_VECTORS | 4,
 };
 
-static void ivshmem_remote_interrupt(struct ivshmem_endpoint *ive)
+static void ivshmem_write_rstate(struct ivshmem_endpoint *ive, u32 new_state)
 {
+	unsigned long page_virt = TEMPORARY_MAPPING_BASE +
+		this_cpu_id() * PAGE_SIZE * NUM_TEMPORARY_PAGES;
+	const struct jailhouse_memory *shmem = ive->shmem;
+	unsigned long rstate_offs;
+	u32 *rstate;
+
+	rstate_offs = ive->rstate_write & IVSHMEM_RSTATE_OFFSET_MASK;
+
+	if (!(ive->rstate_write & IVSHMEM_RSTATE_WRITE_ENABLE) ||
+	    rstate_offs > shmem->size - sizeof(*rstate))
+		return;
+
+	rstate = (u32 *)(page_virt + (rstate_offs & PAGE_OFFS_MASK));
+
 	/*
-	 * Hold the link lock while sending the interrupt so that ivshmem_exit
-	 * can synchronize on the completion of the delivery.
+	 * Cannot fail: upper levels of page table were already created by
+	 * paging_init, and we always map single pages, thus only update the
+	 * leaf entry and do not have to deal with huge pages.
 	 */
-	spin_lock(&ive->link->lock);
-	if (ive->remote)
-		arch_ivshmem_trigger_interrupt(ive->remote);
-	spin_unlock(&ive->link->lock);
+	paging_create(&hv_paging_structs, shmem->phys_start + rstate_offs,
+		      PAGE_SIZE, page_virt, PAGE_DEFAULT_FLAGS,
+		      PAGING_NON_COHERENT);
+
+	*rstate = new_state;
+	memory_barrier();
 }
 
 int ivshmem_update_msix(struct pci_device *device)
@@ -139,15 +160,31 @@ static enum mmio_result ivshmem_register_mmio(void *arg,
 		mmio->value = ive->id;
 		break;
 	case IVSHMEM_REG_DOORBELL:
-		if (mmio->is_write)
-			ivshmem_remote_interrupt(ive);
-		else
+		if (mmio->is_write) {
+			/*
+			 * Hold the link lock while sending the interrupt so
+			 * that ivshmem_exit can synchronize on the completion
+			 * of the delivery.
+			 */
+			spin_lock(&ive->link->lock);
+			if (ive->remote)
+				arch_ivshmem_trigger_interrupt(ive->remote);
+			spin_unlock(&ive->link->lock);
+		} else {
 			mmio->value = 0;
+		}
 		break;
 	case IVSHMEM_REG_LSTATE:
 		if (mmio->is_write) {
+			spin_lock(&ive->link->lock);
+
 			ive->state = mmio->value;
-			ivshmem_remote_interrupt(ive);
+			if (ive->remote) {
+				ivshmem_write_rstate(ive->remote, ive->state);
+				arch_ivshmem_trigger_interrupt(ive->remote);
+			}
+
+			spin_unlock(&ive->link->lock);
 		} else {
 			mmio->value = ive->state;
 		}
@@ -157,6 +194,19 @@ static enum mmio_result ivshmem_register_mmio(void *arg,
 		spin_lock(&ive->link->lock);
 		mmio->value = ive->remote ? ive->remote->state : 0;
 		spin_unlock(&ive->link->lock);
+		break;
+	case IVSHMEM_REG_RSTATE_WRITE:
+		if (mmio->is_write) {
+			spin_lock(&ive->link->lock);
+
+			ive->rstate_write = mmio->value;
+			ivshmem_write_rstate(ive,
+					ive->remote ? ive->remote->state : 0);
+
+			spin_unlock(&ive->link->lock);
+		} else {
+			mmio->value = ive->rstate_write;
+		}
 		break;
 	default:
 		/* ignore any other access */
@@ -456,13 +506,16 @@ void ivshmem_exit(struct pci_device *device)
 		/*
 		 * The spinlock synchronizes the disconnection of the remote
 		 * device with any in-flight interrupts targeting the device
-		 * to be destroyed.
+		 * to be destroyed and any changes to the remote's rstate_write
+		 * register.
 		 */
 		spin_lock(&ive->link->lock);
-		remote->remote = NULL;
-		spin_unlock(&ive->link->lock);
 
-		ivshmem_remote_interrupt(ive);
+		remote->remote = NULL;
+		ivshmem_write_rstate(remote, 0);
+		arch_ivshmem_trigger_interrupt(remote);
+
+		spin_unlock(&ive->link->lock);
 
 		ive->device = NULL;
 	} else {
