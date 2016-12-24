@@ -29,30 +29,32 @@
 #include <jailhouse/processor.h>
 #include <asm/percpu.h>
 
-#define VIRTIO_VENDOR_ID	0x1af4
-#define IVSHMEM_DEVICE_ID	0x1110
+#define VIRTIO_VENDOR_ID		0x1af4
+#define IVSHMEM_DEVICE_ID		0x1110
 
-#define IVSHMEM_CFG_VENDOR_CAP	0x40
-#define IVSHMEM_CFG_MSIX_CAP	(IVSHMEM_CFG_VENDOR_CAP+IVSHMEM_CFG_VENDOR_LEN)
+#define IVSHMEM_CFG_VENDOR_CAP		0x40
+#define IVSHMEM_CFG_MSIX_CAP		(IVSHMEM_CFG_VENDOR_CAP + \
+					 IVSHMEM_CFG_VENDOR_LEN)
 
 /*
- * We cannot allow dynamic remapping of the shared memory location under
- * Jailhouse. Therefore, location and size are reported via a vendor capability.
+ * We cannot allow dynamic remapping of the shared memory locations under
+ * Jailhouse. Therefore, address and size are reported via a vendor capability
+ * instead of BARs.
  */
-#define IVSHMEM_CFG_SHMEM_ADDR0	(IVSHMEM_CFG_VENDOR_CAP + 4)
-#define IVSHMEM_CFG_SHMEM_SIZE0	(IVSHMEM_CFG_VENDOR_CAP + 12)
-#define IVSHMEM_CFG_VENDOR_LEN	52
+#define IVSHMEM_CFG_SHMEM_ADDR0		(IVSHMEM_CFG_VENDOR_CAP + 4)
+#define IVSHMEM_CFG_SHMEM_SIZE0		(IVSHMEM_CFG_VENDOR_CAP + 12)
+#define IVSHMEM_CFG_VENDOR_LEN		52
 
 /* Flags in IVSHMEM_CFG_VENDOR_CAP + 3 */
-#define IVHSMEM_CFGFLAG_INTX	(1 << (0 + 24))
+#define IVHSMEM_CFGFLAG_INTX		(1 << (0 + 24))
 
-#define IVSHMEM_MSIX_VECTORS	1
+#define IVSHMEM_MSIX_VECTORS		1
 
 /*
  * Make the region two times as large as the MSI-X table to guarantee a
  * power-of-2 size (encoding constraint of a BAR).
  */
-#define IVSHMEM_BAR4_SIZE	(0x10 * IVSHMEM_MSIX_VECTORS * 2)
+#define IVSHMEM_BAR4_SIZE		(0x10 * IVSHMEM_MSIX_VECTORS * 2)
 
 #define IVSHMEM_REG_ID			0x00
 #define IVSHMEM_REG_DOORBELL		0x04
