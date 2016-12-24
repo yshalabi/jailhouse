@@ -38,6 +38,11 @@ test_compile()
 		prepend="#define __ASSEMBLY__
 			 #include <jailhouse/types.h>"
 		;;
+	ivshmem.h)
+		if [ "$1" == "asm" ]; then
+			# must be included by jailhouse/ivshmem.h only
+			return
+		fi
 	esac
 
 	echo "$prepend" > .header_check.tmp.c
