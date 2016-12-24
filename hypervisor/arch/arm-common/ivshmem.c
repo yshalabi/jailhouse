@@ -13,15 +13,15 @@
 #include <jailhouse/ivshmem.h>
 #include <asm/irqchip.h>
 
-void arch_ivshmem_trigger_interrupt(struct ivshmem_endpoint *ive)
+void arch_ivshmem_trigger_interrupt(struct ivshmem_endpoint *ive,
+				    unsigned int vector)
 {
-	unsigned int irq_id = ive->arch.irq_id;
-
-	if (irq_id)
-		irqchip_set_pending(NULL, irq_id);
+	if (ive->arch.irq_id[vector])
+		irqchip_set_pending(NULL, ive->arch.irq_id[vector]);
 }
 
-int arch_ivshmem_update_msix(struct pci_device *device, bool enabled)
+int arch_ivshmem_update_msix(struct pci_device *device, unsigned int vector,
+			     bool enabled)
 {
 	struct ivshmem_endpoint *ive = device->ivshmem_endpoint;
 	unsigned int irq_id = 0;
@@ -33,7 +33,7 @@ int arch_ivshmem_update_msix(struct pci_device *device, bool enabled)
 			return -EPERM;
 	}
 
-	ive->arch.irq_id = irq_id;
+	ive->arch.irq_id[vector] = irq_id;
 
 	return 0;
 }
@@ -43,6 +43,6 @@ void arch_ivshmem_update_intx(struct ivshmem_endpoint *ive, bool enabled)
 	u8 pin = ive->cspace[PCI_CFG_INT/4] >> 8;
 	struct pci_device *device = ive->device;
 
-	ive->arch.irq_id = enabled ?
+	ive->arch.irq_id[0] = enabled ?
 		(32 + device->cell->config->vpci_irq_base + pin - 1) : 0;
 }

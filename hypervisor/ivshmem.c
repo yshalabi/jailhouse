@@ -48,8 +48,6 @@
 /* Flags in IVSHMEM_CFG_VENDOR_CAP + 3 */
 #define IVHSMEM_CFGFLAG_INTX		(1 << (0 + 24))
 
-#define IVSHMEM_MSIX_VECTORS		1
-
 /*
  * Make the region two times as large as the MSI-X table to guarantee a
  * power-of-2 size (encoding constraint of a BAR).
@@ -83,8 +81,7 @@ static const u32 default_cspace[IVSHMEM_CFG_SIZE / sizeof(u32)] = {
 	[PCI_CFG_CAPS/4] = IVSHMEM_CFG_VENDOR_CAP,
 	[IVSHMEM_CFG_VENDOR_CAP/4] = (IVSHMEM_CFG_VENDOR_LEN << 16) |
 				(IVSHMEM_CFG_MSIX_CAP << 8) | PCI_CAP_VENDOR,
-	[IVSHMEM_CFG_MSIX_CAP/4] = (IVSHMEM_MSIX_VECTORS - 1) << 16 |
-				   (0x00 << 8) | PCI_CAP_MSIX,
+	[IVSHMEM_CFG_MSIX_CAP/4] = (0x00 << 8) | PCI_CAP_MSIX,
 	[(IVSHMEM_CFG_MSIX_CAP + 0x4)/4] = 4,
 	[(IVSHMEM_CFG_MSIX_CAP + 0x8)/4] = 0x10 * IVSHMEM_MSIX_VECTORS | 4,
 };
@@ -120,7 +117,7 @@ static void ivshmem_write_rstate(struct ivshmem_endpoint *ive, u32 new_state)
 	memory_barrier();
 }
 
-int ivshmem_update_msix(struct pci_device *device)
+int ivshmem_update_msix_vector(struct pci_device *device, unsigned int vector)
 {
 	struct ivshmem_endpoint *ive = device->ivshmem_endpoint;
 	union pci_msix_registers cap;
@@ -132,12 +129,23 @@ int ivshmem_update_msix(struct pci_device *device)
 
 	cap.raw = ive->cspace[IVSHMEM_CFG_MSIX_CAP/4];
 	enabled = cap.enable && !cap.fmask &&
-		!ive->device->msix_vectors[0].masked &&
+		!ive->device->msix_vectors[vector].masked &&
 		ive->cspace[PCI_CFG_COMMAND/4] & PCI_CMD_MASTER;
 
 	spin_lock(&ive->link->lock);
-	err = arch_ivshmem_update_msix(device, enabled);
+	err = arch_ivshmem_update_msix(device, vector, enabled);
 	spin_unlock(&ive->link->lock);
+
+	return err;
+}
+
+int ivshmem_update_msix(struct pci_device *device)
+{
+	unsigned int vector, num_vectors = device->info->num_msix_vectors;
+	int err = 0;
+
+	for (vector = 0; vector < num_vectors && !err; vector++)
+		err = ivshmem_update_msix_vector(device, vector);
 
 	return err;
 }
@@ -158,6 +166,7 @@ static enum mmio_result ivshmem_register_mmio(void *arg,
 					      struct mmio_access *mmio)
 {
 	struct ivshmem_endpoint *ive = arg;
+	unsigned int vector, msix_vectors = ive->device->info->num_msix_vectors;
 
 	switch (mmio->address) {
 	case IVSHMEM_REG_ID:
@@ -166,6 +175,16 @@ static enum mmio_result ivshmem_register_mmio(void *arg,
 		break;
 	case IVSHMEM_REG_DOORBELL:
 		if (mmio->is_write) {
+			if (msix_vectors > 0) {
+				vector = mmio->value;
+				/* ignore request if out of range */
+				if (vector >= msix_vectors)
+					break;
+			} else {
+				/* INTx means only one vector */
+				vector = 0;
+			}
+
 			/*
 			 * Hold the link lock while sending the interrupt so
 			 * that ivshmem_exit can synchronize on the completion
@@ -173,7 +192,8 @@ static enum mmio_result ivshmem_register_mmio(void *arg,
 			 */
 			spin_lock(&ive->link->lock);
 			if (ive->remote)
-				arch_ivshmem_trigger_interrupt(ive->remote);
+				arch_ivshmem_trigger_interrupt(ive->remote,
+							       vector);
 			spin_unlock(&ive->link->lock);
 		} else {
 			mmio->value = 0;
@@ -186,7 +206,7 @@ static enum mmio_result ivshmem_register_mmio(void *arg,
 			ive->state = mmio->value;
 			if (ive->remote) {
 				ivshmem_write_rstate(ive->remote, ive->state);
-				arch_ivshmem_trigger_interrupt(ive->remote);
+				arch_ivshmem_trigger_interrupt(ive->remote, 0);
 			}
 
 			spin_unlock(&ive->link->lock);
@@ -223,6 +243,7 @@ static enum mmio_result ivshmem_register_mmio(void *arg,
 
 static enum mmio_result ivshmem_msix_mmio(void *arg, struct mmio_access *mmio)
 {
+	unsigned int vector = mmio->address / sizeof(union pci_msix_vector);
 	struct ivshmem_endpoint *ive = arg;
 	u32 *msix_table = (u32 *)ive->device->msix_vectors;
 
@@ -241,7 +262,7 @@ static enum mmio_result ivshmem_msix_mmio(void *arg, struct mmio_access *mmio)
 	} else {
 		if (mmio->is_write) {
 			msix_table[mmio->address / 4] = mmio->value;
-			if (ivshmem_update_msix(ive->device))
+			if (ivshmem_update_msix_vector(ive->device, vector))
 				return MMIO_ERROR;
 		} else {
 			mmio->value = msix_table[mmio->address / 4];
@@ -403,7 +424,8 @@ int ivshmem_init(struct cell *cell, struct pci_device *device)
 	       PCI_BDF_PARAMS(dev_info->bdf), cell->config->name);
 
 	if (dev_info->shmem_regions_start + 2 >=
-	    cell->config->num_memory_regions)
+	    cell->config->num_memory_regions ||
+	    dev_info->num_msix_vectors > IVSHMEM_MSIX_VECTORS)
 		return trace_error(-EINVAL);
 
 	mem = jailhouse_cell_mem_regions(cell->config) +
@@ -495,6 +517,10 @@ void ivshmem_reset(struct pci_device *device)
 		ive->cspace[IVSHMEM_CFG_VENDOR_CAP/4] &= 0xffff00ff;
 	} else {
 		device->bar[4] = PCI_BAR_64BIT;
+		ive->cspace[IVSHMEM_CFG_MSIX_CAP/4] |=
+			(device->info->num_msix_vectors - 1) << 16;
+		for (n = 0; n < device->info->num_msix_vectors; n++)
+			device->msix_vectors[n].masked = 1;
 	}
 
 	for (n = 0; n < 3; n++) {
@@ -533,7 +559,7 @@ void ivshmem_exit(struct pci_device *device)
 
 		remote->remote = NULL;
 		ivshmem_write_rstate(remote, 0);
-		arch_ivshmem_trigger_interrupt(remote);
+		arch_ivshmem_trigger_interrupt(remote, 0);
 
 		spin_unlock(&ive->link->lock);
 

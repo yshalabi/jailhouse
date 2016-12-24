@@ -147,9 +147,9 @@ struct {
 			.bdf = 0x0e << 3,
 			.bar_mask = {
 				0xfffff000, 0xffffffff, 0x00000000,
-				0x00000000, 0xffffffe0, 0xffffffff,
+				0x00000000, 0xfffffe00, 0xffffffff,
 			},
-			.num_msix_vectors = 1,
+			.num_msix_vectors = 16,
 			.shmem_regions_start = 3,
 			.shmem_protocol = JAILHOUSE_SHMEM_PROTO_VETH,
 		},

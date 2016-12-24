@@ -11,5 +11,5 @@
  */
 
 struct arch_pci_ivshmem {
-	u16 irq_id;
+	u16 irq_id[IVSHMEM_MSIX_VECTORS];
 };

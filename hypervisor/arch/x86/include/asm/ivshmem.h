@@ -13,5 +13,5 @@
 #include <asm/apic.h>
 
 struct arch_pci_ivshmem {
-	struct apic_irq_message irq_msg;
+	struct apic_irq_message irq_msg[IVSHMEM_MSIX_VECTORS];
 };

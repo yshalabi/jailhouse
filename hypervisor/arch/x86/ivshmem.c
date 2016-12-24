@@ -17,23 +17,25 @@
 #include <jailhouse/printk.h>
 #include <asm/pci.h>
 
-void arch_ivshmem_trigger_interrupt(struct ivshmem_endpoint *ive)
+void arch_ivshmem_trigger_interrupt(struct ivshmem_endpoint *ive,
+				    unsigned int vector)
 {
-	if (ive->arch.irq_msg.valid)
-		apic_send_irq(ive->arch.irq_msg);
+	if (ive->arch.irq_msg[vector].valid)
+		apic_send_irq(ive->arch.irq_msg[vector]);
 }
 
-int arch_ivshmem_update_msix(struct pci_device *device, bool enabled)
+int arch_ivshmem_update_msix(struct pci_device *device, unsigned int vector,
+			     bool enabled)
 {
 	struct ivshmem_endpoint *ive = device->ivshmem_endpoint;
 	struct apic_irq_message irq_msg = { .valid = 0 };
 	union x86_msi_vector msi;
 
 	if (enabled) {
-		msi.raw.address = device->msix_vectors[0].address;
-		msi.raw.data = device->msix_vectors[0].data;
+		msi.raw.address = device->msix_vectors[vector].address;
+		msi.raw.data = device->msix_vectors[vector].data;
 
-		irq_msg = x86_pci_translate_msi(device, 0, 0, msi);
+		irq_msg = x86_pci_translate_msi(device, vector, 0, msi);
 
 		if (irq_msg.valid &&
 		    !apic_filter_irq_dest(device->cell, &irq_msg)) {
@@ -45,7 +47,7 @@ int arch_ivshmem_update_msix(struct pci_device *device, bool enabled)
 		}
 	}
 
-	ive->arch.irq_msg = irq_msg;
+	ive->arch.irq_msg[vector] = irq_msg;
 
 	return 0;
 }
