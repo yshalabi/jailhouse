@@ -105,6 +105,8 @@ union pci_msix_registers {
 	/** @publicsection */
 } __attribute__((packed));
 
+#define PCI_MSIX_CTRL_RW_MASK	(BIT_MASK(15, 14) << 16)
+
 /** MSI-X table entry. See PCI specification. */
 union pci_msix_vector {
 	/** @privatesection */
