@@ -99,6 +99,7 @@ int ivshmem_update_msix(struct pci_device *device)
 	struct ivshmem_endpoint *ive = device->ivshmem_endpoint;
 	union pci_msix_registers cap;
 	bool enabled;
+	int err;
 
 	if (device->info->num_msix_vectors == 0)
 		return 0;
@@ -108,7 +109,11 @@ int ivshmem_update_msix(struct pci_device *device)
 		!ive->device->msix_vectors[0].masked &&
 		ive->cspace[PCI_CFG_COMMAND/4] & PCI_CMD_MASTER;
 
-	return arch_ivshmem_update_msix(device, enabled);
+	spin_lock(&ive->link->lock);
+	err = arch_ivshmem_update_msix(device, enabled);
+	spin_unlock(&ive->link->lock);
+
+	return err;
 }
 
 static void ivshmem_update_intx(struct ivshmem_endpoint *ive)
@@ -117,8 +122,10 @@ static void ivshmem_update_intx(struct ivshmem_endpoint *ive)
 		IVHSMEM_CFGFLAG_INTX;
 	bool masked = ive->cspace[PCI_CFG_COMMAND/4] & PCI_CMD_INTX_OFF;
 
+	spin_lock(&ive->link->lock);
 	if (ive->device->info->num_msix_vectors == 0)
 		arch_ivshmem_update_intx(ive, enabled && !masked);
+	spin_unlock(&ive->link->lock);
 }
 
 static enum mmio_result ivshmem_register_mmio(void *arg,
