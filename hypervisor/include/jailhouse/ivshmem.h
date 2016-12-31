@@ -25,6 +25,8 @@
  * @{
  */
 
+struct ivshmem_link;
+
 struct ivshmem_endpoint {
 	u32 cspace[IVSHMEM_CFG_SIZE / sizeof(u32)];
 	u32 id;
@@ -32,6 +34,7 @@ struct ivshmem_endpoint {
 	u64 bar0_address;
 	u64 bar4_address;
 	struct pci_device *device;
+	struct ivshmem_link *link;
 	const struct jailhouse_memory *shmem;
 	struct ivshmem_endpoint *remote;
 	spinlock_t remote_lock;
