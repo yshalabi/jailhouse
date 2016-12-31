@@ -61,6 +61,7 @@
 
 struct ivshmem_link {
 	struct ivshmem_endpoint eps[2];
+	spinlock_t lock;
 	u16 bdf;
 	struct ivshmem_link *next;
 };
@@ -84,13 +85,13 @@ static const u32 default_cspace[IVSHMEM_CFG_SIZE / sizeof(u32)] = {
 static void ivshmem_remote_interrupt(struct ivshmem_endpoint *ive)
 {
 	/*
-	 * Hold the remote lock while sending the interrupt so that
-	 * ivshmem_exit can synchronize on the completion of the delivery.
+	 * Hold the link lock while sending the interrupt so that ivshmem_exit
+	 * can synchronize on the completion of the delivery.
 	 */
-	spin_lock(&ive->remote_lock);
+	spin_lock(&ive->link->lock);
 	if (ive->remote)
 		arch_ivshmem_trigger_interrupt(ive->remote);
-	spin_unlock(&ive->remote_lock);
+	spin_unlock(&ive->link->lock);
 }
 
 static enum mmio_result ivshmem_register_mmio(void *arg,
@@ -119,9 +120,9 @@ static enum mmio_result ivshmem_register_mmio(void *arg,
 		break;
 	case IVSHMEM_REG_RSTATE:
 		/* read-only remote state */
-		spin_lock(&ive->remote_lock);
+		spin_lock(&ive->link->lock);
 		mmio->value = ive->remote ? ive->remote->state : 0;
-		spin_unlock(&ive->remote_lock);
+		spin_unlock(&ive->link->lock);
 		break;
 	default:
 		/* ignore any other access */
@@ -444,9 +445,9 @@ void ivshmem_exit(struct pci_device *device)
 		 * device with any in-flight interrupts targeting the device
 		 * to be destroyed.
 		 */
-		spin_lock(&remote->remote_lock);
+		spin_lock(&ive->link->lock);
 		remote->remote = NULL;
-		spin_unlock(&remote->remote_lock);
+		spin_unlock(&ive->link->lock);
 
 		ivshmem_remote_interrupt(ive);
 
