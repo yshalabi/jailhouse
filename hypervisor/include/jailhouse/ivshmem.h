@@ -27,7 +27,7 @@
 
 struct ivshmem_endpoint {
 	u32 cspace[IVSHMEM_CFG_SIZE / sizeof(u32)];
-	u32 ivpos;
+	u32 id;
 	u32 state;
 	u64 bar0_address;
 	u64 bar4_address;
