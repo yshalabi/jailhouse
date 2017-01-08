@@ -136,8 +136,8 @@ struct {
 			.type = JAILHOUSE_PCI_TYPE_IVSHMEM,
 			.bdf = 0x0078,
 			.bar_mask = {
-				0xfffff000, 0xffffffff, 0x00000000,
-				0x00000000, 0xfffffe00, 0xffffffff,
+				0xfffff000, 0xffffffff, 0xfffffe00,
+				0xffffffff, 0x00000000, 0x00000000
 			},
 			.num_msix_vectors = 16,
 			.shmem_regions_start = 6,

@@ -1,7 +1,7 @@
 /*
  * Jailhouse, a Linux-based partitioning hypervisor
  *
- * Copyright (c) Siemens AG, 2014-2016
+ * Copyright (c) Siemens AG, 2014-2017
  *
  * Authors:
  *  Henning Schild <henning.schild@siemens.com>
@@ -34,7 +34,7 @@ struct ivshmem_endpoint {
 	u32 id;
 	u32 state;
 	u64 bar0_address;
-	u64 bar4_address;
+	u64 bar2_address;
 	u64 rstate_write;
 	struct pci_device *device;
 	struct ivshmem_link *link;

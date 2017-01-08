@@ -1,7 +1,7 @@
 /*
  * Jailhouse, a Linux-based partitioning hypervisor
  *
- * Copyright (c) Siemens AG, 2014-2016
+ * Copyright (c) Siemens AG, 2014-2017
  *
  * Authors:
  *  Henning Schild <henning.schild@siemens.com>
@@ -52,7 +52,7 @@
  * Make the region two times as large as the MSI-X table to guarantee a
  * power-of-2 size (encoding constraint of a BAR).
  */
-#define IVSHMEM_BAR4_SIZE		(0x10 * IVSHMEM_MSIX_VECTORS * 2)
+#define IVSHMEM_BAR2_SIZE		(0x10 * IVSHMEM_MSIX_VECTORS * 2)
 
 #define IVSHMEM_REG_ID			0x00
 #define IVSHMEM_REG_DOORBELL		0x04
@@ -82,8 +82,8 @@ static const u32 default_cspace[IVSHMEM_CFG_SIZE / sizeof(u32)] = {
 	[IVSHMEM_CFG_VENDOR_CAP/4] = (IVSHMEM_CFG_VENDOR_LEN << 16) |
 				(IVSHMEM_CFG_MSIX_CAP << 8) | PCI_CAP_VENDOR,
 	[IVSHMEM_CFG_MSIX_CAP/4] = (0x00 << 8) | PCI_CAP_MSIX,
-	[(IVSHMEM_CFG_MSIX_CAP + 0x4)/4] = 4,
-	[(IVSHMEM_CFG_MSIX_CAP + 0x8)/4] = 0x10 * IVSHMEM_MSIX_VECTORS | 4,
+	[(IVSHMEM_CFG_MSIX_CAP + 0x4)/4] = 2,
+	[(IVSHMEM_CFG_MSIX_CAP + 0x8)/4] = 0x10 * IVSHMEM_MSIX_VECTORS | 2,
 };
 
 static void ivshmem_write_rstate(struct ivshmem_endpoint *ive, u32 new_state)
@@ -296,7 +296,7 @@ static int ivshmem_write_command(struct ivshmem_endpoint *ive, u16 val)
 	if ((val & PCI_CMD_MEM) != (*cmd & PCI_CMD_MEM)) {
 		if (*cmd & PCI_CMD_MEM) {
 			mmio_region_unregister(device->cell, ive->bar0_address);
-			mmio_region_unregister(device->cell, ive->bar4_address);
+			mmio_region_unregister(device->cell, ive->bar2_address);
 		}
 		if (val & PCI_CMD_MEM) {
 			ive->bar0_address = (*(u64 *)&device->bar[0]) & ~0xfL;
@@ -309,9 +309,9 @@ static int ivshmem_write_command(struct ivshmem_endpoint *ive, u16 val)
 					     ~device->info->bar_mask[0] + 1,
 					     ivshmem_register_mmio, ive);
 
-			ive->bar4_address = (*(u64 *)&device->bar[4]) & ~0xfL;
-			mmio_region_register(device->cell, ive->bar4_address,
-					     IVSHMEM_BAR4_SIZE,
+			ive->bar2_address = (*(u64 *)&device->bar[2]) & ~0xfL;
+			mmio_region_register(device->cell, ive->bar2_address,
+					     IVSHMEM_BAR2_SIZE,
 					     ivshmem_msix_mmio, ive);
 		}
 		*cmd = (*cmd & ~PCI_CMD_MEM) | (val & PCI_CMD_MEM);
@@ -484,7 +484,7 @@ void ivshmem_reset(struct pci_device *device)
 
 	if (ive->cspace[PCI_CFG_COMMAND/4] & PCI_CMD_MEM) {
 		mmio_region_unregister(device->cell, ive->bar0_address);
-		mmio_region_unregister(device->cell, ive->bar4_address);
+		mmio_region_unregister(device->cell, ive->bar2_address);
 	}
 
 	memset(device->bar, 0, sizeof(device->bar));
@@ -503,7 +503,7 @@ void ivshmem_reset(struct pci_device *device)
 		/* disable MSI-X capability */
 		ive->cspace[IVSHMEM_CFG_VENDOR_CAP/4] &= 0xffff00ff;
 	} else {
-		device->bar[4] = PCI_BAR_64BIT;
+		device->bar[2] = PCI_BAR_64BIT;
 		ive->cspace[IVSHMEM_CFG_MSIX_CAP/4] |=
 			(device->info->num_msix_vectors - 1) << 16;
 		for (n = 0; n < device->info->num_msix_vectors; n++)
