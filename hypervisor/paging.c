@@ -457,7 +457,7 @@ paging_gvirt2gphys(const struct guest_paging_structures *pg_structs,
 }
 
 /**
- * Map physical device resource into hypervisor address space
+ * Map physical device resource into hypervisor address space.
  * @param phys		Physical address of the resource.
  * @param size		Size of the resource.
  *
@@ -482,7 +482,7 @@ void *paging_map_device(unsigned long phys, unsigned long size)
 }
 
 /**
- * Unmap physical device resource from hypervisor address space
+ * Unmap physical device resource from hypervisor address space.
  * @param phys		Physical address of the resource.
  * @param virt		Virtual address of the resource.
  * @param size		Size of the resource.
@@ -496,6 +496,41 @@ void paging_unmap_device(unsigned long phys, void *virt, unsigned long size)
 	paging_destroy(&hv_paging_structs, (unsigned long)virt, size,
 		       PAGING_NON_COHERENT);
 	page_free(&remap_pool, virt, PAGES(size));
+}
+
+/**
+ * Create a top-level link to the common hypervisor page table.
+ * @param pg_dest_structs	Descriptor of the target paging structures.
+ * @param virt			Virtual start address of the linked region.
+ *
+ * @return 0 on success, negative error code otherwise.
+ *
+ * @note The link is only created at the lop level of page table. The source
+ * needs to point the page table hierarchy, not a terminal entry.
+ */
+int paging_create_hvpt_link(const struct paging_structures *pg_dest_structs,
+			    unsigned long virt)
+{
+	const struct paging *paging = hv_paging_structs.root_paging;
+	pt_entry_t source_pte, dest_pte;
+
+	source_pte = paging->get_entry(hv_paging_structs.root_table, virt);
+	dest_pte = paging->get_entry(pg_dest_structs->root_table, virt);
+
+	/*
+	 * Source page table must by populated and the to-be-linked
+	 * region must not be a terminal entry.
+	 */
+	if (!paging->entry_valid(source_pte, PAGE_PRESENT_FLAGS) ||
+	    paging->get_phys(source_pte, virt) != INVALID_PHYS_ADDR)
+		return trace_error(-EINVAL);
+
+	paging->set_next_pt(dest_pte, paging->get_next_pt(source_pte));
+
+	/* Mapping is always non-coherent, so no flush_pt_entry needed. */
+	arch_paging_flush_page_tlbs(virt);
+
+	return 0;
 }
 
 /**
